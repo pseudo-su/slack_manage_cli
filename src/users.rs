@@ -1,3 +1,4 @@
+use clap::{ arg_enum };
 use regex::Regex;
 use slack_api::User;
 use slack_api::UserProfile;
@@ -8,7 +9,13 @@ use prettytable::{Attr, Cell, Row, Table};
 
 use crate::AppError;
 
-pub fn fetch_users(client: &reqwest::Client, token: &str) -> Result<Vec<User>, AppError> {
+arg_enum!{
+    #[derive(Debug)]
+    pub enum SortUsersBy { None, EmailDomain, Username }
+}
+
+pub fn fetch_users(client: &reqwest::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
+    let sort_by = sort_by.unwrap_or(SortUsersBy::None);
     let request = users::ListRequest { presence: None };
     let list_resp = users::list(client, token, &request)?;
     let all_members = match list_resp {
@@ -21,15 +28,15 @@ pub fn fetch_users(client: &reqwest::Client, token: &str) -> Result<Vec<User>, A
         }),
     }?;
 
-    Ok(all_members)
+    let members = sort_users(all_members, sort_by);
+    Ok(members)
 }
-
 
 pub struct UserFilterConfig {
     pub skip_bots: bool,
     pub skip_restricted: bool,
     pub skip_ultra_restricted: bool,
-    pub skip_usernames: Option<Vec<String>>,
+    pub username_filter: Option<Regex>,
     pub email_filter: Option<Regex>,
 }
 
@@ -39,7 +46,7 @@ impl Default for UserFilterConfig {
             skip_bots: true,
             skip_restricted: true,
             skip_ultra_restricted: true,
-            skip_usernames: Some(vec!["admin".to_owned(), "slackbot".to_owned()]),
+            username_filter: None,
             email_filter: None,
         }
     }
@@ -108,12 +115,16 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
         })
         // skip specific usernames
         .filter(|m| {
-            if let Some(skip_usernames) = &filter_config.skip_usernames {
+            if let Some(username_filter) = &filter_config.username_filter {
                 match m {
                     User {
-                        name: Some(ref x), ..
-                    } if skip_usernames.contains(x) => false,
-                    _ => true,
+                        profile:
+                            Some(UserProfile {
+                                email: Some(email), ..
+                            }),
+                        ..
+                    } if username_filter.find(email).is_some() => true,
+                    _ => false,
                 }
             } else {
                 true
@@ -135,7 +146,6 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
             } else {
                 true
             }
-
         })
         .filter(|m| match m {
             User {
@@ -171,39 +181,45 @@ impl Default for PrintUsersConfig {
     }
 }
 
-fn print_users_table(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
-    let mut table = Table::new();
-
-    table.set_format(*prettytable::format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-
-    if let Some(header_row) = header_row {
-        let header_cells = header_row.iter().map(|s| Cell::new(s).with_style(Attr::Bold)).collect();
-        table.add_row(Row::new(header_cells));
+fn user_email_domain(user: &User) -> Option<String> {
+    let rgx = Regex::new("@(.*)$").unwrap();
+    let caps = match user {
+        User{ profile: Some(UserProfile{email: Some(email), ..}), ..} => rgx.captures(email),
+        _ => None,
+    };
+    if let Some(caps) = caps {
+        return caps.get(1).map(|m| m.as_str().to_owned());
     }
-
-    for row in rows {
-        let cells = row.iter().map(|s| {
-            let val: String = s.clone().unwrap_or("-".to_owned());
-            Cell::new(val.as_str())
-        }).collect();
-        table.add_row(cells);
-    }
-
-    // Print the table to stdout
-    table.printstd();
+    return None;
 }
 
-fn print_users_csv(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
-    if let Some(header_row) = header_row {
-        println!("{}", header_row.join(","));
-    }
-    for row in rows {
-        let cells: Vec<String> = row.iter().map(|s| s.clone().unwrap_or("".to_owned())).collect();
-        println!("{}", cells.join(","));
+fn sort_users(members: Vec<User>, sort_by: SortUsersBy) -> Vec<User> {
+    match sort_by {
+        SortUsersBy::None => members,
+        SortUsersBy::Username => {
+            let mut sorted = members.clone();
+            sorted.sort_by(|a, b| {
+                let a_username = a.name.clone().unwrap_or("".to_owned());
+                let b_username = b.name.clone().unwrap_or("".to_owned());
+
+                a_username.cmp(&b_username)
+            });
+            sorted
+        },
+        SortUsersBy::EmailDomain => {
+            let mut sorted = members.clone();
+            sorted.sort_by(|a, b| {
+                let a_email = user_email_domain(a).unwrap_or("".to_owned());
+                let b_email = user_email_domain(b).unwrap_or("".to_owned());
+
+                a_email.cmp(&b_email)
+            });
+            sorted
+        },
     }
 }
 
-pub fn print_users(members: Vec<User>, print_config: &PrintUsersConfig) {
+fn prepare_output(members: Vec<User>, print_config: &PrintUsersConfig) -> (Option<Vec<String>>, Vec<Vec<Option<String>>>) {
     // Assemble the header
     let mut header_row = None;
     if print_config.header {
@@ -262,7 +278,43 @@ pub fn print_users(members: Vec<User>, print_config: &PrintUsersConfig) {
         }
         rows.push(row);
     }
+    return (header_row, rows);
+}
 
+fn print_users_table(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
+    let mut table = Table::new();
+
+    table.set_format(*prettytable::format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+
+    if let Some(header_row) = header_row {
+        let header_cells = header_row.iter().map(|s| Cell::new(s).with_style(Attr::Bold)).collect();
+        table.add_row(Row::new(header_cells));
+    }
+
+    for row in rows {
+        let cells = row.iter().map(|s| {
+            let val: String = s.clone().unwrap_or("-".to_owned());
+            Cell::new(val.as_str())
+        }).collect();
+        table.add_row(cells);
+    }
+
+    // Print the table to stdout
+    table.printstd();
+}
+
+fn print_users_csv(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
+    if let Some(header_row) = header_row {
+        println!("{}", header_row.join(","));
+    }
+    for row in rows {
+        let cells: Vec<String> = row.iter().map(|s| s.clone().unwrap_or("".to_owned())).collect();
+        println!("{}", cells.join(","));
+    }
+}
+
+pub fn print_users(members: Vec<User>, print_config: &PrintUsersConfig) {
+    let (header_row, rows) = prepare_output(members, print_config);
     if print_config.csv {
         return print_users_csv(header_row, rows);
     } else {

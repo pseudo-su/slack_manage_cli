@@ -1,4 +1,4 @@
-use clap::{ Arg, ArgGroup, ArgMatches, App, AppSettings, SubCommand, value_t };
+use clap::{ Arg, ArgGroup, ArgMatches, App, AppSettings, SubCommand };
 use regex::Regex;
 use std::fs::File;
 use std::io::prelude::*;
@@ -31,13 +31,15 @@ fn main() -> Result<(), AppError> {
 
     let email_filter_arg = Arg::with_name("email-filter")
         .takes_value(true)
+        .multiple(true)
         .long("email-filter");
 
     let username_filter_arg = Arg::with_name("username-filter")
         .takes_value(true)
+        .multiple(true)
         .long("username-filter");
 
-    let sort_members_arg = Arg::with_name("sort-users-by")
+    let sort_users_by_arg = Arg::with_name("sort-users-by")
         .takes_value(true)
         .long("sort");
 
@@ -55,7 +57,7 @@ fn main() -> Result<(), AppError> {
             .arg(email_filter_arg.clone())
             .arg(username_filter_arg.clone())
             // presentational
-            .arg(sort_members_arg.clone())
+            .arg(sort_users_by_arg.clone())
         )
         .subcommand(SubCommand::with_name("invite-members")
             .about("controls testing features")
@@ -70,9 +72,9 @@ fn main() -> Result<(), AppError> {
             .arg(email_filter_arg.clone())
             .arg(username_filter_arg.clone())
             // presentational
-            .arg(sort_members_arg.clone())
+            .arg(sort_users_by_arg.clone())
         )
-        .subcommand(SubCommand::with_name("usergroups-update")
+        .subcommand(SubCommand::with_name("update-usergroup-members")
             .about("controls testing features")
             // TODO: ArgGroup one of (id|name|handle)
             .arg(Arg::with_name("usergroup")
@@ -86,7 +88,7 @@ fn main() -> Result<(), AppError> {
             .arg(email_filter_arg.clone())
             .arg(username_filter_arg.clone())
             // presentational
-            .arg(sort_members_arg.clone())
+            .arg(sort_users_by_arg.clone())
         )
         .get_matches();
 
@@ -99,7 +101,7 @@ fn main() -> Result<(), AppError> {
         return invite_members_to_channel(matches);
     }
 
-    if let Some(matches) = matches.subcommand_matches("usergroups-update") {
+    if let Some(matches) = matches.subcommand_matches("update-usergroup-members") {
         return update_usergroup_members(matches);
     }
 
@@ -121,14 +123,51 @@ fn load_token(token: Option<&str>, token_filepath: Option<&str> ) -> Result<Stri
     return Err(AppError{ message: "Unable to load token".to_owned() });
 }
 
+// TODO: had to copy this here Because IntoIter didn't work (I had to `.clone()`)
+macro_rules! value_t {
+    ($m:ident.value_of($v:expr), $t:ty) => {
+        match $m.value_of($v) {
+            Some(v) => {
+                match v.parse::<$t>() {
+                    Ok(val) => Ok(val),
+                    Err(_)  => Err(format!("'{}' isn't a valid value", ::clap::Format::Warning(v))),
+                }
+            },
+            None => Err(format!("The argument '{}' not found", ::clap::Format::Warning($v)))
+        }
+    };
+    ($m:ident.values_of($v:expr), $t:ty) => {
+        match $m.values_of($v) {
+            Some(ref v) => {
+                let mut tmp = Vec::with_capacity(v.len());
+                let mut err = None;
+                for pv in v.clone() {
+                    match pv.parse::<$t>() {
+                        Ok(rv) => tmp.push(rv),
+                        Err(e) => {
+                            err = Some(format!("'{}' isn't a valid value\n\t{}", ::clap::Format::Warning(pv),e));
+                            break
+                        }
+                    }
+                }
+                match err {
+                    Some(e) => Err(e),
+                    None => Ok(tmp)
+                }
+            },
+            None => Err(format!("The argument '{}' was not found", ::clap::Format::Warning($v)))
+        }
+    };
+}
+
 fn list_members(matches: &ArgMatches) -> Result<(), AppError> {
     let client = reqwest::Client::new();
     let oauth_api_key = matches.value_of("token");
     let oauth_api_key_filepath = matches.value_of("token-filepath");
     let token = load_token(oauth_api_key, oauth_api_key_filepath)?;
 
-    let email_filter: Option<Regex> = value_t!(matches.value_of("email-filter"), Regex).ok();
-    let username_filter: Option<Regex> = value_t!(matches.value_of("username-filter"), Regex).ok();
+    let email_filter = value_t!(matches.values_of("email-filter"), Regex).unwrap_or(vec![]);
+    let username_filter = value_t!(matches.values_of("username-filter"), Regex).unwrap_or(vec![]);
     let sort_by = value_t!(matches.value_of("sort-users-by"), users::SortUsersBy).ok();
 
     let members = fetch_users(&client, token.as_ref(), sort_by)?;
@@ -138,9 +177,11 @@ fn list_members(matches: &ArgMatches) -> Result<(), AppError> {
         ..Default::default()
     };
 
-    let members = filter_users(members, &filter_config);
+    let member_groups = filter_users(members, &filter_config);
     let print_config = PrintUsersConfig{ ..Default::default() };
-    print_users(members, &print_config);
+    for (title, members) in member_groups {
+        print_users(title, members, &print_config);
+    }
     return Ok(());
 }
 
@@ -150,31 +191,34 @@ fn invite_members_to_channel(matches: &ArgMatches) -> Result<(), AppError> {
     let oauth_api_key_filepath = matches.value_of("token-filepath");
     let token = load_token(oauth_api_key, oauth_api_key_filepath)?;
 
-    let email_filter: Option<Regex> = value_t!(matches.value_of("email-filter"), Regex).ok();
-    let username_filter: Option<Regex> = value_t!(matches.value_of("username-filter"), Regex).ok();
+    let email_filter = value_t!(matches.values_of("email-filter"), Regex).unwrap_or(vec![]);
+    let username_filter = value_t!(matches.values_of("username-filter"), Regex).unwrap_or(vec![]);
     let sort_by = value_t!(matches.value_of("sort-users-by"), users::SortUsersBy).ok();
 
     let channel_name = matches.value_of("channel-name").unwrap();
 
     let members = fetch_users(&client, token.as_ref(), sort_by)?;
+
     let filter_config = UserFilterConfig{
         username_filter: username_filter,
         email_filter: email_filter,
         ..Default::default()
     };
+    let member_groups = filter_users(members, &filter_config);
+    for (title, members) in member_groups {
+        println!("{}", title);
+        for (i, member) in members.iter().enumerate() {
+            let name = member.name.clone().unwrap_or("--".to_owned());
+            let email = member.profile.clone()
+                .map(|p| p.email.unwrap_or("--".to_owned()))
+                .unwrap_or("--".to_owned());
+            let channel_id = get_channel(&client, token.as_ref(), channel_name)?;
 
-    let members = filter_users(members, &filter_config);
-    for (i, member) in members.iter().enumerate() {
-        let name = member.name.clone().unwrap_or("--".to_owned());
-        let email = member.profile.clone()
-            .map(|p| p.email.unwrap_or("--".to_owned()))
-            .unwrap_or("--".to_owned());
-        let channel_id = get_channel(&client, token.as_ref(), channel_name)?;
-
-        match invite_user_to_channel(&client, token.as_ref(), member, channel_id.as_ref()) {
-            Ok(_) => println!("{}. Inviting {} ({}) to #{}", i + 1, name, email, channel_name),
-            Err(err) => println!("{}. {} ({}), {}", i + 1, name, email, err),
-        };
+            match invite_user_to_channel(&client, token.as_ref(), member, channel_id.as_ref()) {
+                Ok(_) => println!("{}. Inviting {} ({}) to #{}", i + 1, name, email, channel_name),
+                Err(err) => println!("{}. {} ({}), {}", i + 1, name, email, err),
+            };
+        }
     }
     return Ok(());
 }
@@ -185,8 +229,8 @@ fn update_usergroup_members(matches: &ArgMatches) -> Result<(), AppError> {
     let oauth_api_key_filepath = matches.value_of("token-filepath");
     let token = load_token(oauth_api_key, oauth_api_key_filepath)?;
 
-    let email_filter: Option<Regex> = value_t!(matches.value_of("email-filter"), Regex).ok();
-    let username_filter: Option<Regex> = value_t!(matches.value_of("username-filter"), Regex).ok();
+    let email_filter = value_t!(matches.values_of("email-filter"), Regex).unwrap_or(vec![]);
+    let username_filter = value_t!(matches.values_of("username-filter"), Regex).unwrap_or(vec![]);
     let sort_by = value_t!(matches.value_of("sort-users-by"), users::SortUsersBy).ok();
 
     let members = fetch_users(&client, token.as_ref(), sort_by)?;
@@ -196,7 +240,10 @@ fn update_usergroup_members(matches: &ArgMatches) -> Result<(), AppError> {
         ..Default::default()
     };
 
-    let members = filter_users(members, &filter_config);
-    println!("{:#?}", members);
+    let member_groups = filter_users(members, &filter_config);
+    for (title, members) in member_groups {
+        println!("{}", title);
+        println!("{:#?}", members);
+    }
     return Ok(());
 }

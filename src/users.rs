@@ -6,6 +6,7 @@ use slack_api::UserProfile;
 use slack_api::users;
 
 use prettytable::{Attr, Cell, Row, Table};
+use prettytable::format::Alignment;
 
 use crate::AppError;
 
@@ -36,8 +37,8 @@ pub struct UserFilterConfig {
     pub skip_bots: bool,
     pub skip_restricted: bool,
     pub skip_ultra_restricted: bool,
-    pub username_filter: Option<Regex>,
-    pub email_filter: Option<Regex>,
+    pub username_filter: Vec<Regex>,
+    pub email_filter: Vec<Regex>,
 }
 
 impl Default for UserFilterConfig {
@@ -46,8 +47,8 @@ impl Default for UserFilterConfig {
             skip_bots: true,
             skip_restricted: true,
             skip_ultra_restricted: true,
-            username_filter: None,
-            email_filter: None,
+            username_filter: vec![],
+            email_filter: vec![],
         }
     }
 }
@@ -61,8 +62,8 @@ impl From<users::ListError<reqwest::Error>> for AppError {
 }
 
 
-pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec<User> {
-    members
+pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec<(String, Vec<User>)> {
+    let valid_members: Vec<User> = members
         .into_iter()
         // Skip deleted users
         .filter(|m| match m {
@@ -74,22 +75,20 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
         })
         // Skip bots if flag is set
         .filter(|m| {
-            if !filter_config.skip_bots {
-                true
-            } else {
+            if filter_config.skip_bots {
                 match m {
                     User {
                         is_bot: Some(true), ..
                     } => false,
                     _ => true,
                 }
+            } else {
+                true
             }
         })
         // Skip guests
         .filter(|m| {
-            if !filter_config.skip_restricted {
-                true
-            } else {
+            if filter_config.skip_restricted {
                 match m {
                     User {
                         is_restricted: Some(true),
@@ -97,51 +96,19 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
                     } => false,
                     _ => true,
                 }
+            } else {
+                true
             }
         })
         // skip single channel guests
         .filter(|m| {
-            if !filter_config.skip_ultra_restricted {
-                true
-            } else {
+            if filter_config.skip_ultra_restricted {
                 match m {
                     User {
                         is_ultra_restricted: Some(true),
                         ..
                     } => false,
                     _ => true,
-                }
-            }
-        })
-        // skip specific usernames
-        .filter(|m| {
-            if let Some(username_filter) = &filter_config.username_filter {
-                match m {
-                    User {
-                        profile:
-                            Some(UserProfile {
-                                email: Some(email), ..
-                            }),
-                        ..
-                    } if username_filter.find(email).is_some() => true,
-                    _ => false,
-                }
-            } else {
-                true
-            }
-        })
-        // only include email domains that match the ones provided
-        .filter(|m| {
-            if let Some(email_filter) = &filter_config.email_filter {
-                match m {
-                    User {
-                        profile:
-                            Some(UserProfile {
-                                email: Some(email), ..
-                            }),
-                        ..
-                    } if email_filter.find(email).is_some() => true,
-                    _ => false,
                 }
             } else {
                 true
@@ -156,11 +123,55 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
             } => true,
             _ => false,
         })
-        .collect()
+        .collect();
+
+    let mut filtered_groups: Vec<(String, Vec<User>)> = vec![];
+    if filter_config.email_filter.len() < 1 && filter_config.username_filter.len() < 1 {
+        let group = ("NO FILTER".to_owned(), valid_members.clone());
+        filtered_groups.push(group);
+    }
+
+    for regex in &filter_config.email_filter {
+        let members = valid_members.clone().into_iter()
+        .filter(|m| {
+            match m {
+                User {
+                    profile:
+                        Some(UserProfile {
+                            email: Some(email), ..
+                        }),
+                    ..
+                } if regex.find(email).is_some() => true,
+                _ => false,
+            }
+        })
+        .collect();
+        let group = (format!("EMAIL REGEX: \"{}\"", regex).to_owned(), members);
+        filtered_groups.push(group);
+    }
+
+    for regex in &filter_config.username_filter {
+        let members = valid_members.clone().into_iter()
+        .filter(|m| {
+            match m {
+                User {
+                    name: Some(name),
+                    ..
+                } if regex.find(name).is_some() => true,
+                _ => false,
+            }
+        })
+        .collect();
+        let group = (format!("USERNAME REGEX: \"{}\"", regex).to_owned(), members);
+        filtered_groups.push(group);
+    }
+
+    filtered_groups
 }
 
 pub struct PrintUsersConfig {
     pub csv: bool,
+    pub title: bool,
     pub header: bool,
     pub count: bool,
     pub user_id: bool,
@@ -172,6 +183,7 @@ impl Default for PrintUsersConfig {
     fn default() -> Self {
         Self {
             csv: false,
+            title: true,
             header: true,
             count: true,
             user_id: true,
@@ -281,10 +293,18 @@ fn prepare_output(members: Vec<User>, print_config: &PrintUsersConfig) -> (Optio
     return (header_row, rows);
 }
 
-fn print_users_table(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
+fn print_users_table(title: Option<String>, header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
     let mut table = Table::new();
+    let col_num = rows.first().map(|r| r.len()).unwrap_or(0);
 
     table.set_format(*prettytable::format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    if let Some(title) = title {
+        table.add_row(Row::new(vec![
+            Cell::new_align(title.as_ref(), Alignment::CENTER)
+                .with_style(Attr::Bold)
+                .with_hspan(col_num)
+        ]));
+    }
 
     if let Some(header_row) = header_row {
         let header_cells = header_row.iter().map(|s| Cell::new(s).with_style(Attr::Bold)).collect();
@@ -301,9 +321,10 @@ fn print_users_table(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<Strin
 
     // Print the table to stdout
     table.printstd();
+    println!("");
 }
 
-fn print_users_csv(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
+fn print_users_csv(_: Option<String>, header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>>>) {
     if let Some(header_row) = header_row {
         println!("{}", header_row.join(","));
     }
@@ -313,11 +334,12 @@ fn print_users_csv(header_row: Option<Vec<String>>, rows: Vec<Vec<Option<String>
     }
 }
 
-pub fn print_users(members: Vec<User>, print_config: &PrintUsersConfig) {
+pub fn print_users(title: String, members: Vec<User>, print_config: &PrintUsersConfig) {
+    let title = if print_config.title {Some(title)} else {None};
     let (header_row, rows) = prepare_output(members, print_config);
     if print_config.csv {
-        return print_users_csv(header_row, rows);
+        return print_users_csv(title, header_row, rows);
     } else {
-        return print_users_table(header_row, rows);
+        return print_users_table(title, header_row, rows);
     }
 }

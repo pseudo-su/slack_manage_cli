@@ -12,11 +12,11 @@ use crate::AppError;
 
 arg_enum!{
     #[derive(Debug)]
-    pub enum SortUsersBy { None, EmailDomain, Username }
+    pub enum SortUsersBy { NoSort, EmailDomain, Username }
 }
 
 pub fn fetch_users(client: &reqwest::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
-    let sort_by = sort_by.unwrap_or(SortUsersBy::None);
+    let sort_by = sort_by.unwrap_or(SortUsersBy::NoSort);
     let request = users::ListRequest { presence: None };
     let list_resp = users::list(client, token, &request)?;
     let all_members = match list_resp {
@@ -207,7 +207,7 @@ fn user_email_domain(user: &User) -> Option<String> {
 
 fn sort_users(members: Vec<User>, sort_by: SortUsersBy) -> Vec<User> {
     match sort_by {
-        SortUsersBy::None => members,
+        SortUsersBy::NoSort => members,
         SortUsersBy::Username => {
             let mut sorted = members.clone();
             sorted.sort_by(|a, b| {
@@ -299,7 +299,7 @@ fn print_users_table(title: Option<String>, header_row: Option<Vec<String>>, row
 
     table.set_format(*prettytable::format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
     if let Some(title) = title {
-        table.add_row(Row::new(vec![
+        table.set_titles(Row::new(vec![
             Cell::new_align(title.as_ref(), Alignment::CENTER)
                 .with_style(Attr::Bold)
                 .with_hspan(col_num)

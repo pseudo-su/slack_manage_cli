@@ -16,6 +16,8 @@ reqwest = "^0.9.0"
 clap = "2.33"
 regex = "1"
 prettytable-rs = "^0.8"
+structopt = "0.2"
+dotenv = "0.14.1"
 
 [[bin]]
 name = "slack-manage"

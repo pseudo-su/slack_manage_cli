@@ -2,6 +2,11 @@
 
 == Example
 
+.List and filter users in the server
+....
+slack-manage list-members --token-filepath ./apikey.txt --email-filter email-domain.com
+....
+
 .Invite users to channel by email
 ....
 slack-manage invite-members channel-name --token-filepath ./apikey.txt --email-filter email-domain.com

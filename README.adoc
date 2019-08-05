@@ -1,0 +1,8 @@
+= Slack Manage CLI
+
+== Example
+
+.Invite users to channel by email
+....
+slack-manage invite-members channel-name --token-filepath ./apikey.txt --email-filter email-domain.com
+....

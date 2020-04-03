@@ -5,6 +5,7 @@ mod app_error;
 mod channels;
 mod users;
 mod cli;
+mod usergroup;
 use cli::Opts;
 use app_error::AppError;
 use users::{fetch_users, filter_users, print_users, UserFilterConfig, PrintUsersConfig };

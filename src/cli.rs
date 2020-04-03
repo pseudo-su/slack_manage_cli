@@ -1,3 +1,4 @@
+use std::error::Error;
 use clap::{ ArgGroup };
 use structopt::StructOpt;
 use regex::Regex;
@@ -58,17 +59,22 @@ pub enum Command {
     sort_by: Option<users::SortUsersBy>,
   },
   UpdateUsergroupMembers{
-    /// File Containing Oauth Access Token
-    #[structopt(short, long)]
-    email_filter: Option<Vec<Regex>>,
-
-    /// File Containing Oauth Access Token
-    #[structopt(short, long)]
-    username_filter: Option<Vec<Regex>>,
-
-    #[structopt(short, long)]
-    sort_by: Option<users::SortUsersBy>,
+    #[structopt(short = "D", parse(try_from_str = "parse_key_val"))]
+    defines: Vec<UsergroupMembershipSelector>,
   },
+}
+
+fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<Error>>
+where
+    T: std::str::FromStr,
+    T::Err: Error + 'static,
+    U: std::str::FromStr,
+    U::Err: Error + 'static,
+{
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
 // fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<Error>>

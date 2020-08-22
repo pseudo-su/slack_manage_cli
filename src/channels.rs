@@ -5,9 +5,9 @@ use slack_api::channels::{ListRequest};
 use crate::app_error::AppError;
 
 impl From<channels::ListError<reqwest::Error>> for AppError {
-    fn from(_: channels::ListError<reqwest::Error>) -> Self {
+  fn from(e: channels::ListError<reqwest::Error>) -> Self {
         return AppError {
-            message: "Error fetching channels".to_owned(),
+            message: format!("Error fetching channels: {}", e.to_string()),
         };
     }
 }
@@ -39,4 +39,21 @@ pub fn invite_user_to_channel(client: &reqwest::Client, token: &str, member: &Us
     channels::invite(client, token, &request)?;
 
     Ok(())
+}
+
+// TODO: user a formatter and don't use println
+pub fn add_members_to_channel(client: &reqwest::Client, token: &str, members: Vec<User>, channel_name: &str) -> Result<(), AppError> {
+  for (i, member) in members.iter().enumerate() {
+    let name = member.name.clone().unwrap_or("--".to_owned());
+    let email = member.profile.clone()
+        .map(|p| p.email.unwrap_or("--".to_owned()))
+        .unwrap_or("--".to_owned());
+    let channel_id = get_channel(&client, token.as_ref(), channel_name.as_ref())?;
+
+    match invite_user_to_channel(&client, token.as_ref(), member, channel_id.as_ref()) {
+        Ok(_) => println!("{}. Inviting {} ({}) to #{}", i + 1, name, email, channel_name),
+        Err(err) => println!("{}. {} ({}), {}", i + 1, name, email, err),
+    };
+  }
+  Ok(())
 }

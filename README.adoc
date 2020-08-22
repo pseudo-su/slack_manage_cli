@@ -1,13 +1,36 @@
 = Slack Manage CLI
 
-== Example
+Get an API KEY: https://slack.com/intl/en-gb/help/articles/215770388-Create-and-regenerate-API-tokens
+
+== Features
+* [x] "List members"
+** [x] filter using regex on username or email.
+** [ ] filter where members are inactive for more than a given period of time.
+* [ ] List channels and group into a tree based on detecting channel prefixes.
+* [x] "Add members to channel" after filtering members using regex on username or email (broken because slack deprecated the channels API).
+* [ ] "Update usergroup members" using a list of members filtered using rege on username and email.
+* [ ] List any channels where there are "external users" in channels where they shouldn't. EG: list all external users in channels not prefixed with `#shared-`.
+* [ ] List all link:https://mantel-group.slack.com/apps/manage/custom-integrations[Incoming Hook Custom Integrations] with the details about the user who created/owns them.
+
+== Usage
 
 .List and filter users in the server
 ....
-slack-manage list-members --token-filepath ./apikey.txt --email-filter email-domain.com
+slack-manage list-members --token-filepath ./apikey.test.txt --email-filter email-domain.com
+....
+
+.List and filter users into multiple groups by email
+....
+cargo run list-members --email-filter="digio.com.au" --email-filter="kasna.com.au" --email-filter="eliiza.com.au" --email-filter="cmd.com.au" --email-filter="mantelgroup.com.au"
+....
+
+.List and filter users into multiple groups by username
+....
+cargo run list-members --username-filter="Everyone named barry::barry" --username-filter="kasna.com.au"
 ....
 
 .Invite users to channel by email
 ....
-slack-manage invite-members channel-name --token-filepath ./apikey.txt --email-filter email-domain.com
+slack-manage add-members-to-channel channel-name --token-filepath ./apikey.test.txt --email-filter email-domain.com
 ....
+

@@ -9,6 +9,13 @@ use prettytable::{Attr, Cell, Row, Table};
 use prettytable::format::Alignment;
 
 use crate::AppError;
+use std::fmt::{Formatter, Display, Error};
+
+#[derive(Debug)]
+pub struct RegexGroupFilter {
+  pub group_name: Option<String>,
+  pub regex: Regex,
+}
 
 arg_enum!{
     #[derive(Debug)]
@@ -37,8 +44,8 @@ pub struct UserFilterConfig {
     pub skip_bots: bool,
     pub skip_restricted: bool,
     pub skip_ultra_restricted: bool,
-    pub username_filter: Vec<Regex>,
-    pub email_filter: Vec<Regex>,
+    pub username_filter: Vec<RegexGroupFilter>,
+    pub email_filter: Vec<RegexGroupFilter>,
 }
 
 impl Default for UserFilterConfig {
@@ -54,15 +61,54 @@ impl Default for UserFilterConfig {
 }
 
 impl From<users::ListError<reqwest::Error>> for AppError {
-    fn from(_: users::ListError<reqwest::Error>) -> Self {
+    fn from(e: users::ListError<reqwest::Error>) -> Self {
+        println!("{}", e);
         return AppError {
             message: "Error fetching user list".to_owned(),
         };
     }
 }
 
+pub struct FilterUsersResultMeta {
+    skipped_users_count: usize,
+    searched_users_count: usize,
+    matched_users_count: usize,
+}
 
-pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec<(String, Vec<User>)> {
+#[derive(Clone)]
+pub struct FilteredGroup {
+    pub group_name: Option<String>,
+    // TODO: rename to display_name
+    pub display_name: String,
+    pub filter: Option<String>,
+    pub members: Vec<User>
+}
+
+impl Display for FilteredGroup {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), Error> {
+        // TODO: make print_users use formatter instead of `println!().`
+        print_users(self.display_name.to_owned(), self.members.clone(), &PrintUsersConfig::default());
+        Ok(())
+    }
+}
+
+pub struct FilterUsersResult {
+    pub meta: FilterUsersResultMeta,
+    pub groups: Vec<FilteredGroup>,
+}
+
+impl Display for FilterUsersResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        writeln!(f, "Matched {} users of the {} searched (skipped {}).", self.meta.matched_users_count, self.meta.searched_users_count, self.meta.skipped_users_count)?;
+        for group in self.groups.clone() {
+            write!(f, "{}", group)?;
+        }
+        Ok(())
+    }
+}
+
+pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> FilterUsersResult {
+    let members_count = members.len();
     let valid_members: Vec<User> = members
         .into_iter()
         // Skip deleted users
@@ -125,13 +171,18 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
         })
         .collect();
 
-    let mut filtered_groups: Vec<(String, Vec<User>)> = vec![];
+    let mut filtered_groups: Vec<FilteredGroup> = vec![];
     if filter_config.email_filter.len() < 1 && filter_config.username_filter.len() < 1 {
-        let group = ("NO FILTER".to_owned(), valid_members.clone());
+        let group = FilteredGroup{
+            group_name: None,
+            display_name: "NO FILTER".to_owned(),
+            filter: None,
+            members: valid_members.clone(),
+        };
         filtered_groups.push(group);
     }
 
-    for regex in &filter_config.email_filter {
+    for filter in &filter_config.email_filter {
         let members = valid_members.clone().into_iter()
         .filter(|m| {
             match m {
@@ -141,32 +192,62 @@ pub fn filter_users(members: Vec<User>, filter_config: &UserFilterConfig) -> Vec
                             email: Some(email), ..
                         }),
                     ..
-                } if regex.find(email).is_some() => true,
+                } if filter.regex.is_match(email) => true,
                 _ => false,
             }
         })
         .collect();
-        let group = (format!("EMAIL REGEX: \"{}\"", regex).to_owned(), members);
+        let regex_str = filter.regex.as_str();
+        let group_name = filter.group_name.to_owned();
+        let group_label = group_name.to_owned()
+            .map_or("".to_owned(), |g| format!("Group name=\"{}\" ", g.as_str()));
+        let display_name = format!("Filtered by email: {}Regex=\"{}\"", group_label, regex_str).to_owned();
+        let group = FilteredGroup{
+            group_name,
+            display_name,
+            filter: Some(format!("{}", filter.regex.as_str())),
+            members,
+        };
         filtered_groups.push(group);
     }
 
-    for regex in &filter_config.username_filter {
+    for filter in &filter_config.username_filter {
         let members = valid_members.clone().into_iter()
         .filter(|m| {
             match m {
                 User {
                     name: Some(name),
                     ..
-                } if regex.find(name).is_some() => true,
+                } => filter.regex.is_match(name),
                 _ => false,
             }
         })
         .collect();
-        let group = (format!("USERNAME REGEX: \"{}\"", regex).to_owned(), members);
+        let regex_str = filter.regex.as_str();
+        let group_name = filter.group_name.to_owned();
+        let group_label = group_name.to_owned()
+            .map_or("".to_owned(), |g| format!("Group name=\"{}\" ", g.as_str()));
+        let display_name = format!("Filtered by username: {}Regex=\"{}\"", group_label, regex_str).to_owned();
+        let group = FilteredGroup{
+            group_name,
+            display_name,
+            filter: Some(format!("{}", filter.regex.as_str())),
+            members,
+        };
         filtered_groups.push(group);
     }
+    let matched_users_count = filtered_groups.iter().fold( 0, |prev, group| prev + group.members.len());
+    let result = FilterUsersResult{
+        meta: FilterUsersResultMeta{
+            skipped_users_count: members_count - valid_members.len(),
+            searched_users_count: valid_members.len(),
+            matched_users_count,
+        },
+        
+        groups: filtered_groups,
+    };
 
-    filtered_groups
+    result
 }
 
 pub struct PrintUsersConfig {

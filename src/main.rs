@@ -14,9 +14,9 @@ use structopt::StructOpt;
 fn main() -> Result<(), AppError> {
     dotenv::dotenv().ok();
 
-    let opts = Opts::from_args();
+    let root_opts = Opts::from_args();
 
-    let token: Result<String, AppError> = match opts.global_opts {
+    let token: Result<String, AppError> = match root_opts.global_opts {
         GlobalOpts {
             token_filepath: Some(filepath),
             ..
@@ -39,34 +39,17 @@ fn main() -> Result<(), AppError> {
     // let verbose = opts.verbose;
     // let dry_run = opts.dry_run;
 
-    match opts.command {
-        cli_opts::Command::ListMembers(opts) => {
-            // { email_filter, username_filter, sort_by }
-            commands::list_members(
-                token,
-                opts.query_opts.email_filter.unwrap_or(vec![]),
-                opts.query_opts.username_filter.unwrap_or(vec![]),
-                opts.query_opts.sort_by,
-            )
+    match root_opts.command {
+        cli_opts::Command::ListMembers(command_ops) => {
+            commands::list_members(token, command_ops.query_opts)?
         },
-        cli_opts::Command::AddMembersToChannel(opts) => {
-            // { channel_name, email_filter, username_filter, sort_by }
-            commands::invite_members_to_channel(
-                token,
-                opts.channel_name,
-                opts.query_opts.email_filter.unwrap_or(vec![]),
-                opts.query_opts.username_filter.unwrap_or(vec![]),
-                opts.query_opts.sort_by,
-            )
+        cli_opts::Command::AddMembersToChannel(command_opts) => {
+            commands::add_members_to_channel(token, command_opts.channel_name, command_opts.query_opts)?
         },
-        cli_opts::Command::UpdateUsergroupMembers(opts) => {
-            // { email_filter, username_filter, sort_by }
-            commands::update_usergroup_members(
-                token,
-                opts.query_opts.email_filter.unwrap_or(vec![]),
-                opts.query_opts.username_filter.unwrap_or(vec![]),
-                opts.query_opts.sort_by,
-            )
+        cli_opts::Command::UpdateUsergroupMembers(command_opts) => {
+            commands::update_usergroup_members(token, command_opts.usergroup_name, command_opts.query_opts)?
         },
-    }
+    };
+
+    Ok(())
 }

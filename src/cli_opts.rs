@@ -2,29 +2,8 @@ use std::path::PathBuf;
 use clap::{ AppSettings };
 use structopt::{StructOpt};
 use regex::Regex;
-use std::error::Error;
 use crate::users;
-
-fn parse_regex_group(s: &str) -> Result<users::RegexGroupFilter, Box<dyn Error>> {
-  let pos = s
-    .find('=');
-    // .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
-
-  if let Some(pos) = pos {
-    let group_name: Option<String> = Some(s[..pos].to_owned());
-    let regex = s[pos + 1..].to_owned();
-
-    return Ok(users::RegexGroupFilter{
-      group_name,
-      regex: Regex::new(regex.as_str())?,
-    })
-  }
-
-  Ok(users::RegexGroupFilter{
-    group_name: None,
-    regex: Regex::new(s)?,
-  })
-}
+use users::{UserFilterOn, UserFilter};
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -72,24 +51,67 @@ pub enum Command {
 }
 
 #[derive(StructOpt, Debug)]
-pub struct MemberGroupQueryOpts {
-  /// File Containing Oauth Access Token
-  #[structopt(short, long, parse(try_from_str = parse_regex_group), number_of_values = 1)]
-  pub email_filter: Option<Vec<users::RegexGroupFilter>>,
+pub struct MemberQueryOpts {
+  #[structopt(long)]
+  pub email_match: Option<Vec<Regex>>,
+  #[structopt(long)]
+  pub email_nomatch: Option<Vec<Regex>>,
 
-  /// File Containing Oauth Access Token
-  #[structopt(short, long, parse(try_from_str = parse_regex_group), number_of_values = 1)]
-  pub username_filter: Option<Vec<users::RegexGroupFilter>>,
+  #[structopt(long)]
+  pub username_match: Option<Vec<Regex>>,
+  #[structopt(long)]
+  pub username_nomatch: Option<Vec<Regex>>,
 
-  #[structopt(short, long)]
+  #[structopt(long)]
   pub sort_by: Option<users::SortUsersBy>,
+}
+
+impl MemberQueryOpts {
+  pub fn into_filters(&self) -> Vec<UserFilter> {
+    // Username
+    let username_match: Vec<UserFilter> = self.username_match
+      .iter()
+      .flatten()
+      .map(
+          |r| UserFilter{filter_on: UserFilterOn::Username, regex: r.to_owned(), should_match: true }
+      )
+      .collect();
+    let username_nomatch: Vec<UserFilter> = self.username_nomatch
+      .iter()
+      .flatten()
+      .map(
+          |r| UserFilter{filter_on: UserFilterOn::Username, regex: r.to_owned(), should_match: false }
+      )
+      .collect();
+
+    // Email
+    let email_match: Vec<UserFilter> = self.email_match
+      .iter()
+      .flatten()
+      .map(
+          |r| UserFilter{filter_on: UserFilterOn::Email, regex: r.to_owned(), should_match: true }
+      )
+      .collect();
+    let email_nomatch: Vec<UserFilter> = self.email_nomatch
+      .iter()
+      .flatten()
+      .map(
+          |r| UserFilter{filter_on: UserFilterOn::Email, regex: r.to_owned(), should_match: false }
+      )
+      .collect();
+    
+      // join and return
+      vec![username_match, username_nomatch, email_match, email_nomatch].iter()
+        .flatten()
+        .map(|f| f.clone()).collect()
+  }
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct ListMembers{
   #[structopt(flatten)]
-  pub query_opts: MemberGroupQueryOpts,
+  pub query_opts: MemberQueryOpts,
 }
 
 #[derive(StructOpt, Debug)]
@@ -99,13 +121,15 @@ pub struct AddMembersToChannel{
   pub channel_name: String,
 
   #[structopt(flatten)]
-  pub query_opts: MemberGroupQueryOpts,
+  pub query_opts: MemberQueryOpts,
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct UpdateUsergroupMembers{
+  #[structopt(index = 1)]
+  pub usergroup_name: String,
 
   #[structopt(flatten)]
-  pub query_opts: MemberGroupQueryOpts,
+  pub query_opts: MemberQueryOpts,
 }

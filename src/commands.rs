@@ -1,71 +1,63 @@
 use crate::app_error::AppError;
-use crate::users;
-use crate::users::{fetch_users, filter_users, UserFilterConfig};
+use crate::users::{fetch_users, filter_members, UserFilterConfig};
 use crate::usergroups;
 use crate::channels;
+use crate::cli_opts::{MemberQueryOpts};
 
 pub fn list_members(
   token: String,
-  email_filter: Vec<users::RegexGroupFilter>,
-  username_filter: Vec<users::RegexGroupFilter>,
-  sort_by: Option<users::SortUsersBy>,
+  query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
   let client = reqwest::Client::new();
 
-  let members = fetch_users(&client, token.as_ref(), sort_by)?;
   let filter_config = UserFilterConfig{
-      username_filter,
-      email_filter,
+    filters: query_opts.into_filters(),
       ..Default::default()
   };
+  let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
 
-  let filtered_users = filter_users(members, &filter_config);
-  println!("{}", filtered_users);
+  let result = filter_members(members, &filter_config);
+  println!("{}", result);
   return Ok(());
 }
 
-pub fn invite_members_to_channel(
+pub fn add_members_to_channel(
   token: String,
   channel_name: String,
-  email_filter: Vec<users::RegexGroupFilter>,
-  username_filter: Vec<users::RegexGroupFilter>,
-  sort_by: Option<users::SortUsersBy>,
+  query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
   let client = reqwest::Client::new();
 
-  let members = fetch_users(&client, token.as_ref(), sort_by)?;
-
   let filter_config = UserFilterConfig{
-      username_filter,
-      email_filter,
+    filters: query_opts.into_filters(),
+
       ..Default::default()
   };
-  let filtered_users = filter_users(members, &filter_config);
-  for group in filtered_users.groups {
-    let members = group.members;
-    channels::add_members_to_channel(&client, &token, members, &channel_name)?;
-  }
+  let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
+
+  let result = filter_members(members, &filter_config);
+
+  channels::add_members_to_channel(&client, &token, result.members, &channel_name)?;
+
   return Ok(());
 }
 
 pub fn update_usergroup_members(
   token: String,
-  email_filter: Vec<users::RegexGroupFilter>,
-  username_filter: Vec<users::RegexGroupFilter>,
-  sort_by: Option<users::SortUsersBy>,
+  group_name: String,
+  query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
   let client = reqwest::Client::new();
 
-  let members = fetch_users(&client, token.as_ref(), sort_by)?;
   let filter_config = UserFilterConfig{
-      username_filter,
-      email_filter,
+      filters: query_opts.into_filters(),
       ..Default::default()
   };
+  let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
+  let result = filter_members(members, &filter_config);
+  println!("{}", result);
 
-  let filtered_users = filter_users(members, &filter_config);
-  println!("{}", filtered_users);
+  usergroups::update_usergroup_members(&client, &token, group_name, result.members)?;
 
-  usergroups::update_usergroup_members(&client, &token, filtered_users.groups)?;
   return Ok(());
 }

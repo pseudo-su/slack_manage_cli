@@ -1,9 +1,9 @@
 use clap::{ arg_enum };
 use regex::Regex;
-use slack_api::User;
-use slack_api::UserProfile;
-// use slack_api::usergroups_users;
-use slack_api::users;
+use slack_api::sync::User;
+use slack_api::sync::UserProfile;
+// use slack_api::sync::usergroups_users;
+use slack_api::sync::users;
 
 use prettytable::{Attr, Cell, Row, Table};
 use prettytable::format::Alignment;
@@ -16,7 +16,7 @@ arg_enum!{
     pub enum SortUsersBy { NoSort, EmailDomain, Username }
 }
 
-pub fn fetch_users(client: &reqwest::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
+pub fn fetch_users(client: &reqwest::blocking::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
     let sort_by = sort_by.unwrap_or(SortUsersBy::NoSort);
     let request = users::ListRequest { presence: None };
     let list_resp = users::list(client, token, &request)?;
@@ -128,8 +128,7 @@ impl Display for FilterMembersResult {
 }
 
 pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> FilterMembersResult {
-    let members_count = members.len();
-    let valid_members: Vec<User> = members
+    let undeleted_members: Vec<User> = members
         .into_iter()
         // Skip deleted users
         .filter(|m| match m {
@@ -139,6 +138,10 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
             } => true,
             _ => false,
         })
+        .collect();
+   let undeleted_members_count = undeleted_members.len(); 
+   let valid_members: Vec<User> = undeleted_members
+        .into_iter()
         // Skip bots if flag is set
         .filter(|m| {
             if filter_config.skip_bots {
@@ -187,7 +190,9 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
                 profile: Some(UserProfile { email: Some(_), .. }),
                 ..
             } => true,
-            _ => false,
+            _ => {
+                false
+            },
         })
         .collect();
 
@@ -225,7 +230,8 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
 
     let result = FilterMembersResult{
         meta: FilterMembersResultMeta{
-            skipped_count: members_count - valid_members.len(),
+            skipped_count: undeleted_members_count - valid_members.len(),
+            
             searched_count: valid_members.len(),
             matched_count: filtered_members.len(),
             display_name,

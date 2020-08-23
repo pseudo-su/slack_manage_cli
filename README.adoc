@@ -5,11 +5,13 @@ Get an API KEY: https://slack.com/intl/en-gb/help/articles/215770388-Create-and-
 == Features
 * [x] "List members"
 ** [x] filter using regex on username or email.
-** [ ] filter where members are inactive for more than a given period of time.
-* [ ] List channels and group into a tree based on detecting channel prefixes.
+** [x] Sort by EmailDomain or Username (TODO: EmailDomainReversed).
+** [ ] Allow printing a tree view based on the reverse domain names.
+** [ ] filter where members are inactive for more than a given time period (eg: 6 months).
+* [ ] List channels a tree view based channel prefixes.
 * [x] "Add members to channel" after filtering members using regex on username or email (broken because slack deprecated the channels API).
 * [x] "Update usergroup members" using a list of members filtered using rege on username and email.
-* [ ] List any channels where there are "external users" in channels where they shouldn't. EG: list all external users in channels not prefixed with `#shared-`.
+* [ ] List any channels where there are "external users" in channels where the name matches a pattern. EG: list all external users in channels not prefixed with `#shared-`.
 * [ ] List all link:https://mantel-group.slack.com/apps/manage/custom-integrations[Incoming Hook Custom Integrations] with the details about the user who created/owns them.
 
 == Usage
@@ -18,7 +20,8 @@ Get an API KEY: https://slack.com/intl/en-gb/help/articles/215770388-Create-and-
 ....
 slack-manage list-members \
   --token-file ./apikey.test.txt \
-  --email-match email-domain.com
+  --email-match email-domain.com \
+  --sort-by EmailDomain
 ....
 
 .List and filter using different types of filter

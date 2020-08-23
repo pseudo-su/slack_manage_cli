@@ -1,7 +1,7 @@
 use std::result::{Result};
 
-use slack_api::usergroups;
-use slack_api::{User, usergroups_users};
+use slack_api::sync::usergroups;
+use slack_api::sync::{User, usergroups_users};
 
 use crate::app_error::AppError;
 
@@ -15,6 +15,10 @@ impl From<usergroups_users::UpdateError<reqwest::Error>> for AppError {
 
 impl From<usergroups::ListError<reqwest::Error>> for AppError {
   fn from(e: usergroups::ListError<reqwest::Error>) -> Self {
+      // panic!("{}", match e {
+      //   usergroups::ListError::MalformedResponse(e) => e.to_string(),
+      //   _ => "".to_owned(),
+      // });
       return AppError {
           message: format!("Error fetching usergroups: {}", e.to_string()),
       };
@@ -22,7 +26,7 @@ impl From<usergroups::ListError<reqwest::Error>> for AppError {
 }
 
 // TODO: convert to use a formatter and not use println!()
-pub fn update_usergroup_members(client: &reqwest::Client, token: &str, group_name: String, members: Vec<User>) -> Result<(), AppError> {
+pub fn update_usergroup_members(client: &reqwest::blocking::Client, token: &str, group_name: String, members: Vec<User>) -> Result<(), AppError> {
   // get list of usergroups
   let request = usergroups::ListRequest{
     ..usergroups::ListRequest::default()
@@ -31,16 +35,14 @@ pub fn update_usergroup_members(client: &reqwest::Client, token: &str, group_nam
 
   let usergroup = usergroups
     .iter()
-    .find(|&g| g.name == Some(group_name.to_owned()));
+    .find(|&g| g.name == Some(group_name.to_owned()))
+    .ok_or(AppError{
+      message: format!("Unable to update usergroup members: Group `{}` doesn't exist", group_name),
+    })?;
 
-  usergroup.ok_or(AppError{
-    message: format!("Unable to update usergroup members: Group `{}` doesn't exist", group_name),
-  })?;
-
-  let usergroup_id = usergroup
-    .and_then(|g| g.id.as_ref())
+  let usergroup_id = usergroup.clone().id
     .ok_or(AppError {
-      message: "".to_owned(),
+      message: "Unable to update usergroup with unknown ID".to_owned(),
     })?;
 
   // create or update
@@ -53,10 +55,12 @@ pub fn update_usergroup_members(client: &reqwest::Client, token: &str, group_nam
   let request = usergroups_users::UpdateRequest{
     usergroup: usergroup_id.as_ref(),
     users: userid_csv.as_ref(),
+    // TODO: https://github.com/slack-rs/slack-rs-api/issues/98
+    // include_count: Some(false),
     ..usergroups_users::UpdateRequest::default()
   };
   // usergroups_users::update(client, token, &request)?;
-  print!("Updating user group `{}` with users `{}`", request.usergroup, request.users);
+  print!("Updating user group `{} ({})` with users `{}`", usergroup.clone().name.unwrap_or("--".to_owned()), request.usergroup, request.users);
 
   usergroups_users::update(client, token, &request)?;
 

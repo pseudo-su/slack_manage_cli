@@ -11,13 +11,17 @@ include = [
 ]
 
 [dependencies]
-slack_api = "0.21.0"
-reqwest = "^0.9.0"
+slack_api = { version = "0.23.1", features = ["sync", "reqwest_blocking"]}
+reqwest = {version = "0.10.7", features = ["blocking"]}
 clap = "2.33"
 regex = "1"
 prettytable-rs = "^0.8"
 structopt = "0.3.16"
-dotenv = "0.14.1"
+dotenv = "0.15.0"
+
+# TODO: bug https://github.com/slack-rs/slack-rs-api/issues/98
+[replace]
+'slack_api:0.23.1' = { path = '../../OpenSource/slack-rs-api' }
 
 [[bin]]
 name = "slack-manage"

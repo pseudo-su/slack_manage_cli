@@ -8,7 +8,7 @@ pub fn list_members(
   token: String,
   query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
 
   let filter_config = UserFilterConfig{
     filters: query_opts.into_filters(),
@@ -26,7 +26,7 @@ pub fn add_members_to_channel(
   channel_name: String,
   query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
 
   let filter_config = UserFilterConfig{
     filters: query_opts.into_filters(),
@@ -47,7 +47,7 @@ pub fn update_usergroup_members(
   group_name: String,
   query_opts: MemberQueryOpts
 ) -> Result<(), AppError> {
-  let client = reqwest::Client::new();
+  let client = reqwest::blocking::Client::new();
 
   let filter_config = UserFilterConfig{
       filters: query_opts.into_filters(),

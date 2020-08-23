@@ -1,6 +1,6 @@
-use slack_api::{User};
-use slack_api::channels;
-use slack_api::channels::{ListRequest};
+use slack_api::sync::{User};
+use slack_api::sync::channels;
+use slack_api::sync::channels::{ListRequest};
 
 use crate::app_error::AppError;
 
@@ -12,7 +12,7 @@ impl From<channels::ListError<reqwest::Error>> for AppError {
     }
 }
 
-pub fn get_channel(client: &reqwest::Client, token: &str, channel_name: &str) -> Result<String, AppError> {
+pub fn get_channel(client: &reqwest::blocking::Client, token: &str, channel_name: &str) -> Result<String, AppError> {
   let request = ListRequest{
     exclude_archived: Some(true),
     exclude_members: Some(true)
@@ -29,7 +29,7 @@ pub fn get_channel(client: &reqwest::Client, token: &str, channel_name: &str) ->
   Err(AppError{ message: format!("Unable to find channel {}", channel_name).to_owned() })
 }
 
-pub fn invite_user_to_channel(client: &reqwest::Client, token: &str, member: &User, channel_id: &str) -> Result<(), channels::InviteError<reqwest::Error>> {
+pub fn invite_user_to_channel(client: &reqwest::blocking::Client, token: &str, member: &User, channel_id: &str) -> Result<(), channels::InviteError<reqwest::Error>> {
     let user_id = member.id.clone().unwrap();
     let request = channels::InviteRequest{
       channel: channel_id,
@@ -42,7 +42,7 @@ pub fn invite_user_to_channel(client: &reqwest::Client, token: &str, member: &Us
 }
 
 // TODO: user a formatter and don't use println
-pub fn add_members_to_channel(client: &reqwest::Client, token: &str, members: Vec<User>, channel_name: &str) -> Result<(), AppError> {
+pub fn add_members_to_channel(client: &reqwest::blocking::Client, token: &str, members: Vec<User>, channel_name: &str) -> Result<(), AppError> {
   for (i, member) in members.iter().enumerate() {
     let name = member.name.clone().unwrap_or("--".to_owned());
     let email = member.profile.clone()

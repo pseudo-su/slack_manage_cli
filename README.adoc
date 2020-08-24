@@ -26,7 +26,7 @@ slack-manage list-members \
 
 .List and filter using different types of filter
 ....
-cargo run list-members \
+slack-manage list-members \
   --token-file="apikey.test.txt" \
   --email-match="digio.com.au" \
   --username-match="bob" \
@@ -45,4 +45,3 @@ slack-manage update-usergroup-members "DigIO" \
 ....
 slack-manage add-members-to-channel channel-name --token-file ./apikey.test.txt --email-match email-domain.com
 ....
-

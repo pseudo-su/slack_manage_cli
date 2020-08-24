@@ -12,7 +12,10 @@ pub fn list_members(
 
   let filter_config = UserFilterConfig{
     filters: query_opts.into_filters(),
-      ..Default::default()
+    skip_bots: !query_opts.include_bots,
+    skip_restricted: !query_opts.include_restricted,
+    skip_ultra_restricted: !query_opts.include_ultra_restricted,
+    skip_full_members: query_opts.skip_full_members,
   };
   let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
 
@@ -30,8 +33,10 @@ pub fn add_members_to_channel(
 
   let filter_config = UserFilterConfig{
     filters: query_opts.into_filters(),
-
-      ..Default::default()
+    skip_bots: !query_opts.include_bots,
+    skip_restricted: !query_opts.include_restricted,
+    skip_ultra_restricted: !query_opts.include_ultra_restricted,
+    skip_full_members: query_opts.skip_full_members,
   };
   let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
 
@@ -51,7 +56,10 @@ pub fn update_usergroup_members(
 
   let filter_config = UserFilterConfig{
       filters: query_opts.into_filters(),
-      ..Default::default()
+      skip_bots: !query_opts.include_bots,
+      skip_restricted: !query_opts.include_restricted,
+      skip_ultra_restricted: !query_opts.include_ultra_restricted,
+      skip_full_members: query_opts.skip_full_members,
   };
   let members = fetch_users(&client, token.as_ref(), query_opts.sort_by)?;
   let result = filter_members(members, &filter_config);

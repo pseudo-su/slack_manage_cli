@@ -3,3 +3,4 @@
 .env
 apikey.txt
 apikey.*.txt
+TEMP.*

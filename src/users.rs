@@ -68,31 +68,33 @@ pub struct UserFilterConfig {
     pub skip_bots: bool,
     pub skip_restricted: bool,
     pub skip_ultra_restricted: bool,
+    pub skip_full_members: bool,
     pub filters: Vec<UserFilter>,
 }
 
-impl Default for UserFilterConfig {
-    fn default() -> Self {
-        Self {
-            skip_bots: true,
-            skip_restricted: true,
-            skip_ultra_restricted: true,
-            filters: vec![],
-        }
+impl UserFilterConfig {
+    pub fn print_included(&self) -> String {
+        format!("Included: bots={} restricted={} ultra_restricted={}, full_members={}",
+            !self.skip_bots,
+            !self.skip_restricted,
+            !self.skip_ultra_restricted,
+            !self.skip_full_members,
+        )
     }
 }
 
 impl Display for UserFilterConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        // write!(f, "Skip={}", );
         if self.filters.len() == 0 {
-            write!(f, "No filters")?;
+            write!(f, "No matchers")?;
         } else {
-            write!(f, "Filters:")?;
+            write!(f, "Matchers:")?;
         }
         for filter in &self.filters {
             write!(f, " `{}`", filter)?;
         }
+        writeln!(f, "")?;
+        writeln!(f, "{}", self.print_included())?;
         Ok(())
     }
 }
@@ -161,6 +163,7 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
                 match m {
                     User {
                         is_restricted: Some(true),
+                        is_ultra_restricted: Some(false),
                         ..
                     } => false,
                     _ => true,
@@ -183,16 +186,21 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
                 true
             }
         })
-        .filter(|m| match m {
-            User {
-                id: Some(_),
-                name: Some(_),
-                profile: Some(UserProfile { email: Some(_), .. }),
-                ..
-            } => true,
-            _ => {
-                false
-            },
+        // skip full members
+        .filter(|m| {
+            if filter_config.skip_full_members {
+                match m {
+                    User {
+                        is_bot: Some(false),
+                        is_ultra_restricted: Some(false),
+                        is_restricted: Some(false),
+                        ..
+                    } => false,
+                    _ => true,
+                }
+            } else {
+                true
+            }
         })
         .collect();
 
@@ -200,30 +208,36 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
 
     let filtered_members: Vec<User> = valid_members
         .iter()
-        .filter(| &member | {
-            if let User {
-                name: Some(member_username),
-                profile:
-                    Some(UserProfile {
-                        email: Some(member_email),
+        .filter(| member | {
+
+            // make sure the user passes all filters
+            filter_config.filters.iter().all(|filter| {
+                match filter {
+                    UserFilter{
+                        filter_on: UserFilterOn::Email,
                         ..
-                    }),
-                ..
-            } = member {
-                // make sure the user passes all filters
-                filter_config.filters.iter().all(|filter| {
-                    match filter {
-                        UserFilter{
-                            filter_on: UserFilterOn::Email,
-                            ..
-                        } => filter.regex.is_match(member_email.as_str()) == filter.should_match,
-                        UserFilter{
-                            filter_on: UserFilterOn::Username,
-                            ..
-                        } => filter.regex.is_match(member_username.as_str()) == filter.should_match,
-                    }
-                })
-            } else { false }
+                    } => {
+                        // let member = member.to_owned();
+                        let email = member.profile.as_ref()
+                            .and_then(|p| p.email.as_ref());
+                        if let Some(member_email) = email {
+                            filter.should_match == filter.regex.is_match(member_email.as_str())
+                        } else {
+                            false
+                        }
+                    },
+                    UserFilter{
+                        filter_on: UserFilterOn::Username,
+                        ..
+                    } => {
+                        if let Some(member_username) = member.name.as_ref() {
+                            filter.should_match == filter.regex.is_match(member_username.as_str())
+                        } else {
+                            false
+                        }
+                    },
+                }
+            })
         })
         .map(|m| m.to_owned())
         .collect();

@@ -64,6 +64,19 @@ pub struct MemberQueryOpts {
 
   #[structopt(long)]
   pub sort_by: Option<users::SortUsersBy>,
+
+  #[structopt(long)]
+  pub include_bots: bool,
+
+  #[structopt(long)]
+  pub include_restricted: bool,
+
+  #[structopt(long)]
+  pub include_ultra_restricted: bool,
+
+  #[structopt(long)]
+  pub skip_full_members: bool,
+
 }
 
 impl MemberQueryOpts {

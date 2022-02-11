@@ -1,12 +1,23 @@
 use std::fs;
 use dotenv;
 
+#[macro_use]
+extern crate serde_derive;
+
+extern crate serde;
+extern crate serde_json;
+extern crate url;
+extern crate reqwest;
+
+
+mod api_client;
 mod commands;
 mod usergroups;
 mod app_error;
 mod channels;
 mod users;
 mod cli_opts;
+
 use cli_opts::{Opts,GlobalOpts};
 use app_error::AppError;
 use structopt::StructOpt;

@@ -43,5 +43,7 @@ slack-manage update-usergroup-members "DigIO" \
 
 .Invite users to channel by email
 ....
-slack-manage add-members-to-channel channel-name --token-file ./apikey.test.txt --email-match email-domain.com
+slack-manage add-members-to-channel channel-name \
+  --token-file ./apikey.test.txt \
+  --email-match email-domain.com
 ....

@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
 use crate::users::{fetch_users, filter_members, UserFilterConfig};
-use crate::usergroups;
-use crate::channels;
+// use crate::usergroups;
+// use crate::channels;
 use crate::cli_opts::{MemberQueryOpts};
 
 pub fn list_members(
@@ -42,7 +42,8 @@ pub fn add_members_to_channel(
 
   let result = filter_members(members, &filter_config);
 
-  channels::add_members_to_channel(&client, &token, result.members, &channel_name)?;
+  // TODO: uncomment
+  // channels::add_members_to_channel(&client, &token, result.members, &channel_name)?;
 
   return Ok(());
 }
@@ -65,7 +66,8 @@ pub fn update_usergroup_members(
   let result = filter_members(members, &filter_config);
   println!("{}", result);
 
-  usergroups::update_usergroup_members(&client, &token, group_name, result.members)?;
+  // TODO: uncomment
+  // usergroups::update_usergroup_members(&client, &token, group_name, result.members)?;
 
   return Ok(());
 }

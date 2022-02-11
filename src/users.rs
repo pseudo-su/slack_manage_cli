@@ -1,9 +1,5 @@
 use clap::{ arg_enum };
 use regex::Regex;
-use slack_api::sync::User;
-use slack_api::sync::UserProfile;
-// use slack_api::sync::usergroups_users;
-use slack_api::sync::users;
 
 use prettytable::{Attr, Cell, Row, Table};
 use prettytable::format::Alignment;
@@ -11,15 +7,23 @@ use prettytable::format::Alignment;
 use crate::AppError;
 use std::fmt::{Formatter, Display, Error};
 
+use crate::api_client::apis::users_api;
+use crate::api_client::apis::configuration::Configuration;
+
 arg_enum!{
     #[derive(Debug)]
     pub enum SortUsersBy { NoSort, EmailDomain, Username }
 }
 
-pub fn fetch_users(client: &reqwest::blocking::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
+pub async fn fetch_users(client: &reqwest::blocking::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
     let sort_by = sort_by.unwrap_or(SortUsersBy::NoSort);
-    let request = users::ListRequest { presence: None };
-    let list_resp = users::list(client, token, &request)?;
+    // let request = users::ListRequest { presence: None };
+    // let list_resp = users::list(client, token, &request)?;
+    
+    let mut slack_config = Configuration::default();
+
+    let list_resp = users_api::users_list(&slack_config, Some(token), Some(500), None, Some(true)).await?;
+
     let all_members = match list_resp {
         users::ListResponse {
             members: Some(members),

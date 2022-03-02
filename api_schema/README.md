@@ -10,9 +10,12 @@ A rust client is generated from the OpenAPI specs following similar steps as des
 # install the client generator
 brew install openapi-generator
 
+rm -rf ./src/api_client
+rm -rf ./tmp
+
 # Generate client into temp directory
 openapi-generator generate -g rust \
-  -i complete.openapi.yaml \
+  -i ./api_schema/manicured.openapi.yaml \
   -o ./tmp
 
 # copy useful bit out of the generated client

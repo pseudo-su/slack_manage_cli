@@ -1,8 +1,6 @@
 # Slack API specs
 
-The OpenAPI definitations here are taken from the [Official Slack API Specs](https://github.com/slackapi/slack-api-specs) on github.
-
-They're then converted to OpenAPI v3 using the online [editor.swagger.io](https://editor.swagger.io/) tool, exported as yaml and then any minor remaining linting issues are fixed.
+The Slack OpenAPI are taken from the [here](https://github.com/pseudo-su/slack-specs).
 
 ## Generating the rust client
 
@@ -14,7 +12,7 @@ brew install openapi-generator
 
 # Generate client into temp directory
 openapi-generator generate -g rust \
-  -i api_schema/v3.temp_modifications.openapi.yaml \
+  -i complete.openapi.yaml \
   -o ./tmp
 
 # copy useful bit out of the generated client

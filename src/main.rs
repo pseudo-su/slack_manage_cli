@@ -7,6 +7,7 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 extern crate url;
+extern crate futures;
 extern crate reqwest;
 
 
@@ -21,8 +22,11 @@ mod cli_opts;
 use cli_opts::{Opts,GlobalOpts};
 use app_error::AppError;
 use structopt::StructOpt;
+use futures::executor::block_on;
 
-fn main() -> Result<(), AppError> {
+
+#[tokio::main]
+async fn main() -> Result<(), AppError> {
     dotenv::dotenv().ok();
 
     let root_opts = Opts::from_args();
@@ -52,7 +56,7 @@ fn main() -> Result<(), AppError> {
 
     match root_opts.command {
         cli_opts::Command::ListMembers(command_ops) => {
-            commands::list_members(token, command_ops.query_opts)?
+            block_on(commands::list_members(token, command_ops.query_opts))?
         },
         cli_opts::Command::AddMembersToChannel(command_opts) => {
             commands::add_members_to_channel(token, command_opts.channel_name, command_opts.query_opts)?

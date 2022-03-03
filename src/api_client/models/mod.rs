@@ -16,5 +16,15 @@ pub mod conversations_list_response_body;
 pub use self::conversations_list_response_body::ConversationsListResponseBody;
 pub mod conversations_list_response_body_response_metadata;
 pub use self::conversations_list_response_body_response_metadata::ConversationsListResponseBodyResponseMetadata;
+pub mod users_list_error_response_body;
+pub use self::users_list_error_response_body::UsersListErrorResponseBody;
+pub mod users_list_member;
+pub use self::users_list_member::UsersListMember;
+pub mod users_list_member_profile;
+pub use self::users_list_member_profile::UsersListMemberProfile;
+pub mod users_list_response_body;
+pub use self::users_list_response_body::UsersListResponseBody;
+
+// NOTE: These need to be manualy retained due to issues with codegen
 pub mod one_of_conversations_list_channel_conversations_list_group_conversations_list_im;
 pub use self::one_of_conversations_list_channel_conversations_list_group_conversations_list_im::OneOfconversationsListChannelconversationsListGroupconversationsListIm;

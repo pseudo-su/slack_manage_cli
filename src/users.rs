@@ -1,28 +1,40 @@
 use clap::{ arg_enum };
 use regex::Regex;
-use slack_api::sync::User;
-use slack_api::sync::UserProfile;
-// use slack_api::sync::usergroups_users;
-use slack_api::sync::users;
 
 use prettytable::{Attr, Cell, Row, Table};
 use prettytable::format::Alignment;
 
 use crate::AppError;
 use std::fmt::{Formatter, Display, Error};
+use std::ops::Deref;
+
+use crate::api_client::apis::users_api;
+use crate::api_client::apis::configuration::Configuration;
+use crate::api_client::models::{UsersListResponseBody, UsersListMember};
 
 arg_enum!{
     #[derive(Debug)]
     pub enum SortUsersBy { NoSort, EmailDomain, Username }
 }
 
-pub fn fetch_users(client: &reqwest::blocking::Client, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<User>, AppError> {
+
+impl From<crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>> for AppError {
+    fn from(e: crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>) -> Self {
+        println!("{}", e);
+        return AppError {
+            message: "Error fetching user list".to_owned(),
+        };
+    }
+}
+
+pub async fn fetch_users(client_config: &Configuration, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<UsersListMember>, AppError> {
     let sort_by = sort_by.unwrap_or(SortUsersBy::NoSort);
-    let request = users::ListRequest { presence: None };
-    let list_resp = users::list(client, token, &request)?;
+
+    let list_resp = users_api::users_list(client_config, Some(token), Some(500), None, Some(true)).await?;
+
     let all_members = match list_resp {
-        users::ListResponse {
-            members: Some(members),
+        UsersListResponseBody {
+            members,
             ..
         } => Ok(members),
         _ => Err(AppError {
@@ -99,15 +111,6 @@ impl Display for UserFilterConfig {
     }
 }
 
-impl From<users::ListError<reqwest::Error>> for AppError {
-    fn from(e: users::ListError<reqwest::Error>) -> Self {
-        println!("{}", e);
-        return AppError {
-            message: "Error fetching user list".to_owned(),
-        };
-    }
-}
-
 pub struct FilterMembersResultMeta {
     pub skipped_count: usize,
     pub searched_count: usize,
@@ -117,7 +120,7 @@ pub struct FilterMembersResultMeta {
 
 pub struct FilterMembersResult {
     pub meta: FilterMembersResultMeta,
-    pub members: Vec<User>,
+    pub members: Vec<UsersListMember>,
 }
 
 impl Display for FilterMembersResult {
@@ -129,27 +132,27 @@ impl Display for FilterMembersResult {
     }
 }
 
-pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> FilterMembersResult {
-    let undeleted_members: Vec<User> = members
+pub fn filter_members(members: Vec<UsersListMember>, filter_config: &UserFilterConfig) -> FilterMembersResult {
+    let undeleted_members: Vec<UsersListMember> = members
         .into_iter()
         // Skip deleted users
         .filter(|m| match m {
-            User {
-                deleted: Some(false),
+            UsersListMember {
+                deleted: false,
                 ..
             } => true,
             _ => false,
         })
         .collect();
    let undeleted_members_count = undeleted_members.len(); 
-   let valid_members: Vec<User> = undeleted_members
+   let valid_members: Vec<UsersListMember> = undeleted_members
         .into_iter()
         // Skip bots if flag is set
         .filter(|m| {
             if filter_config.skip_bots {
                 match m {
-                    User {
-                        is_bot: Some(true), ..
+                    UsersListMember {
+                        is_bot: true, ..
                     } => false,
                     _ => true,
                 }
@@ -161,7 +164,7 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
         .filter(|m| {
             if filter_config.skip_restricted {
                 match m {
-                    User {
+                    UsersListMember {
                         is_restricted: Some(true),
                         is_ultra_restricted: Some(false),
                         ..
@@ -176,7 +179,7 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
         .filter(|m| {
             if filter_config.skip_ultra_restricted {
                 match m {
-                    User {
+                    UsersListMember {
                         is_ultra_restricted: Some(true),
                         ..
                     } => false,
@@ -190,10 +193,10 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
         .filter(|m| {
             if filter_config.skip_full_members {
                 match m {
-                    User {
-                        is_bot: Some(false),
-                        is_ultra_restricted: Some(false),
+                    UsersListMember {
+                        is_bot: false,
                         is_restricted: Some(false),
+                        is_ultra_restricted: Some(false),
                         ..
                     } => false,
                     _ => true,
@@ -206,7 +209,7 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
 
     let display_name = filter_config.to_string();
 
-    let filtered_members: Vec<User> = valid_members
+    let filtered_members: Vec<UsersListMember> = valid_members
         .iter()
         .filter(| member | {
 
@@ -218,8 +221,7 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
                         ..
                     } => {
                         // let member = member.to_owned();
-                        let email = member.profile.as_ref()
-                            .and_then(|p| p.email.as_ref());
+                        let email = member.profile.email.clone();
                         if let Some(member_email) = email {
                             filter.should_match == filter.regex.is_match(member_email.as_str())
                         } else {
@@ -230,8 +232,8 @@ pub fn filter_members(members: Vec<User>, filter_config: &UserFilterConfig) -> F
                         filter_on: UserFilterOn::Username,
                         ..
                     } => {
-                        if let Some(member_username) = member.name.as_ref() {
-                            filter.should_match == filter.regex.is_match(member_username.as_str())
+                        if filter.should_match == filter.regex.is_match(member.name.clone().as_str()) {
+                            true
                         } else {
                             false
                         }
@@ -281,10 +283,25 @@ impl Default for PrintUsersConfig {
     }
 }
 
-fn user_email_domain(user: &User) -> Option<String> {
+fn user_email_domain(user: &UsersListMember) -> Option<String> {
     let rgx = Regex::new("@(.*)$").unwrap();
+    // TODO: super hack because I don't understand lifetimes
+    let mut superhack = String::from("");
     let caps = match user {
-        User{ profile: Some(UserProfile{email: Some(email), ..}), ..} => rgx.captures(email),
+        UsersListMember{
+            profile,
+            ..
+        } => {
+            let p = profile.deref().clone();
+            if let Some(email) = p.email.clone() {
+                superhack = email.clone();
+                let captures = rgx.captures(&superhack);
+
+                captures
+            } else {
+                None
+            }
+        },
         _ => None,
     };
     if let Some(caps) = caps {
@@ -293,14 +310,16 @@ fn user_email_domain(user: &User) -> Option<String> {
     return None;
 }
 
-fn sort_users(members: Vec<User>, sort_by: SortUsersBy) -> Vec<User> {
+fn sort_users(members: Vec<UsersListMember>, sort_by: SortUsersBy) -> Vec<UsersListMember> {
     match sort_by {
         SortUsersBy::NoSort => members,
         SortUsersBy::Username => {
             let mut sorted = members.clone();
             sorted.sort_by(|a, b| {
-                let a_username = a.name.clone().unwrap_or("".to_owned());
-                let b_username = b.name.clone().unwrap_or("".to_owned());
+                // let a_username = a.name.clone().unwrap_or("".to_owned());
+                // let b_username = b.name.clone().unwrap_or("".to_owned());
+                let a_username = a.name.clone();
+                let b_username = b.name.clone();
 
                 a_username.cmp(&b_username)
             });
@@ -319,7 +338,7 @@ fn sort_users(members: Vec<User>, sort_by: SortUsersBy) -> Vec<User> {
     }
 }
 
-fn prepare_output(members: Vec<User>, print_config: &PrintUsersConfig) -> (Option<Vec<String>>, Vec<Vec<Option<String>>>) {
+fn prepare_output(members: Vec<UsersListMember>, print_config: &PrintUsersConfig) -> (Option<Vec<String>>, Vec<Vec<Option<String>>>) {
     // Assemble the header
     let mut header_row = None;
     if print_config.header {
@@ -349,15 +368,15 @@ fn prepare_output(members: Vec<User>, print_config: &PrintUsersConfig) -> (Optio
         }
         if print_config.user_id {
             let id_str = match member {
-                User { id: Some(id), .. } => Some(id.to_owned()),
+                UsersListMember { id, .. } => Some(id.to_owned()),
                 _ => None,
             };
             row.push(id_str);
         }
         if print_config.user_name {
             let name_str = match member {
-                User {
-                    name: Some(name), ..
+                UsersListMember {
+                    name, ..
                 } => Some(name.to_owned()),
                 _ => None,
             };
@@ -365,13 +384,16 @@ fn prepare_output(members: Vec<User>, print_config: &PrintUsersConfig) -> (Optio
         }
         if print_config.email {
             let email_str = match member {
-                User {
-                    profile:
-                        Some(UserProfile {
-                            email: Some(email), ..
-                        }),
+                UsersListMember {
+                    profile,
                     ..
-                } => Some(email.to_owned()),
+                } => {
+                    if let Some(email) = profile.email.clone() {
+                        Some(email.to_owned())
+                    } else {
+                        None
+                    }
+                },
                 _ => None,
             };
             row.push(email_str);
@@ -422,7 +444,7 @@ fn print_users_csv(_: Option<String>, header_row: Option<Vec<String>>, rows: Vec
     }
 }
 
-pub fn print_users(title: String, members: Vec<User>, print_config: &PrintUsersConfig) {
+pub fn print_users(title: String, members: Vec<UsersListMember>, print_config: &PrintUsersConfig) {
     let title = if print_config.title {Some(title)} else {None};
     let (header_row, rows) = prepare_output(members, print_config);
     if print_config.csv {

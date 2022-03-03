@@ -59,10 +59,10 @@ async fn main() -> Result<(), AppError> {
             block_on(commands::list_members(token, command_ops.query_opts))?
         },
         cli_opts::Command::AddMembersToChannel(command_opts) => {
-            commands::add_members_to_channel(token, command_opts.channel_name, command_opts.query_opts)?
+            block_on(commands::add_members_to_channel(token, command_opts.channel_name, command_opts.query_opts))?
         },
         cli_opts::Command::UpdateUsergroupMembers(command_opts) => {
-            commands::update_usergroup_members(token, command_opts.usergroup_name, command_opts.query_opts)?
+            block_on(commands::update_usergroup_members(token, command_opts.usergroup_name, command_opts.query_opts))?
         },
     };
 

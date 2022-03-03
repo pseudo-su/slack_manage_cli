@@ -8,8 +8,6 @@ pub mod conversations_list_conversation_type;
 pub use self::conversations_list_conversation_type::ConversationsListConversationType;
 pub mod conversations_list_error_response_body;
 pub use self::conversations_list_error_response_body::ConversationsListErrorResponseBody;
-pub mod conversations_list_group;
-pub use self::conversations_list_group::ConversationsListGroup;
 pub mod conversations_list_im;
 pub use self::conversations_list_im::ConversationsListIm;
 pub mod conversations_list_response_body;
@@ -27,4 +25,5 @@ pub use self::users_list_response_body::UsersListResponseBody;
 
 // NOTE: These need to be manualy retained due to issues with codegen
 pub mod one_of_conversations_list_channel_conversations_list_group_conversations_list_im;
-pub use self::one_of_conversations_list_channel_conversations_list_group_conversations_list_im::OneOfconversationsListChannelconversationsListGroupconversationsListIm;
+// pub use self::one_of_conversations_list_channel_conversations_list_group_conversations_list_im::OneOfconversationsListChannelconversationsListGroupconversationsListIm;
+pub use self::one_of_conversations_list_channel_conversations_list_group_conversations_list_im::OneOfconversationsListChannelconversationsListIm;

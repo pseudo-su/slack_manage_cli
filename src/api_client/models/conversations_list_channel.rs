@@ -22,7 +22,7 @@ pub struct ConversationsListChannel {
     #[serde(rename = "is_archived")]
     pub is_archived: bool,
     #[serde(rename = "is_channel")]
-    pub is_channel: IsChannel,
+    pub is_channel: bool,
     #[serde(rename = "is_ext_shared")]
     pub is_ext_shared: bool,
     #[serde(rename = "is_general")]
@@ -62,7 +62,7 @@ pub struct ConversationsListChannel {
 }
 
 impl ConversationsListChannel {
-    pub fn new(created: f32, creator: String, id: String, is_archived: bool, is_channel: IsChannel, is_ext_shared: bool, is_general: bool, is_group: bool, is_im: bool, is_member: bool, is_mpim: bool, is_org_shared: bool, is_pending_ext_shared: bool, is_private: bool, is_shared: bool, name: String, name_normalized: String, num_members: f32, pending_shared: Vec<serde_json::Value>, previous_names: Vec<String>, purpose: crate::api_client::models::ConversationsListChannelPurpose, topic: crate::api_client::models::ConversationsListChannelTopic, unlinked: f32) -> ConversationsListChannel {
+    pub fn new(created: f32, creator: String, id: String, is_archived: bool, is_channel: bool, is_ext_shared: bool, is_general: bool, is_group: bool, is_im: bool, is_member: bool, is_mpim: bool, is_org_shared: bool, is_pending_ext_shared: bool, is_private: bool, is_shared: bool, name: String, name_normalized: String, num_members: f32, pending_shared: Vec<serde_json::Value>, previous_names: Vec<String>, purpose: crate::api_client::models::ConversationsListChannelPurpose, topic: crate::api_client::models::ConversationsListChannelTopic, unlinked: f32) -> ConversationsListChannel {
         ConversationsListChannel {
             created,
             creator,
@@ -91,16 +91,4 @@ impl ConversationsListChannel {
     }
 }
 
-/// 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum IsChannel {
-    #[serde(rename = "true")]
-    _True,
-}
-
-impl Default for IsChannel {
-    fn default() -> IsChannel {
-        Self::_True
-    }
-}
 

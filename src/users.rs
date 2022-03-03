@@ -17,6 +17,16 @@ arg_enum!{
     pub enum SortUsersBy { NoSort, EmailDomain, Username }
 }
 
+
+impl From<crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>> for AppError {
+    fn from(e: crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>) -> Self {
+        println!("{}", e);
+        return AppError {
+            message: "Error fetching user list".to_owned(),
+        };
+    }
+}
+
 pub async fn fetch_users(client_config: &Configuration, token: &str, sort_by: Option<SortUsersBy>) -> Result<Vec<UsersListMember>, AppError> {
     let sort_by = sort_by.unwrap_or(SortUsersBy::NoSort);
 
@@ -98,15 +108,6 @@ impl Display for UserFilterConfig {
         writeln!(f, "")?;
         writeln!(f, "{}", self.print_included())?;
         Ok(())
-    }
-}
-
-impl From<crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>> for AppError {
-    fn from(e: crate::api_client::apis::Error<crate::api_client::apis::users_api::UsersListError>) -> Self {
-        println!("{}", e);
-        return AppError {
-            message: "Error fetching user list".to_owned(),
-        };
     }
 }
 
@@ -367,7 +368,7 @@ fn prepare_output(members: Vec<UsersListMember>, print_config: &PrintUsersConfig
         }
         if print_config.user_id {
             let id_str = match member {
-                UsersListMember { id: id, .. } => Some(id.to_owned()),
+                UsersListMember { id, .. } => Some(id.to_owned()),
                 _ => None,
             };
             row.push(id_str);

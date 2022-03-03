@@ -18,7 +18,7 @@ pub struct ConversationsListIm {
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "is_im")]
-    pub is_im: IsIm,
+    pub is_im: bool,
     #[serde(rename = "is_org_shared")]
     pub is_org_shared: bool,
     #[serde(rename = "is_user_deleted")]
@@ -30,7 +30,7 @@ pub struct ConversationsListIm {
 }
 
 impl ConversationsListIm {
-    pub fn new(created: f32, id: String, is_im: IsIm, is_org_shared: bool, is_user_deleted: bool, priority: f32, user: String) -> ConversationsListIm {
+    pub fn new(created: f32, id: String, is_im: bool, is_org_shared: bool, is_user_deleted: bool, priority: f32, user: String) -> ConversationsListIm {
         ConversationsListIm {
             created,
             id,
@@ -43,16 +43,4 @@ impl ConversationsListIm {
     }
 }
 
-/// 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum IsIm {
-    #[serde(rename = "true")]
-    _True,
-}
-
-impl Default for IsIm {
-    fn default() -> IsIm {
-        Self::_True
-    }
-}
 

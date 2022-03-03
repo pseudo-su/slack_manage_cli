@@ -15,7 +15,7 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ConversationsListResponseBody {
     #[serde(rename = "channels")]
-    pub channels: Vec<crate::api_client::models::OneOfconversationsListChannelconversationsListGroupconversationsListIm>,
+    pub channels: Vec<crate::api_client::models::OneOfconversationsListChannelconversationsListIm>,
     #[serde(rename = "ok")]
     pub ok: bool,
     #[serde(rename = "response_metadata")]
@@ -24,7 +24,7 @@ pub struct ConversationsListResponseBody {
 
 impl ConversationsListResponseBody {
     /// Schema for successful response from conversations.list method
-    pub fn new(channels: Vec<crate::api_client::models::OneOfconversationsListChannelconversationsListGroupconversationsListIm>, ok: bool, response_metadata: crate::api_client::models::ConversationsListResponseBodyResponseMetadata) -> ConversationsListResponseBody {
+    pub fn new(channels: Vec<crate::api_client::models::OneOfconversationsListChannelconversationsListIm>, ok: bool, response_metadata: crate::api_client::models::ConversationsListResponseBodyResponseMetadata) -> ConversationsListResponseBody {
         ConversationsListResponseBody {
             channels,
             ok,
